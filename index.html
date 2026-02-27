@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Route Scout</title>
+    <meta name="referrer" content="no-referrer">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAxJntvMsqjKobyfTQzUA75vfk7IHCTaMQ&libraries=places,geometry"></script>
+    <style>
+      #map {
+        height: 100%;
+      }
+
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      #inputs-container {
+        padding: 10px;
+        background-color: white;
+        font-family: Arial, sans-serif;
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 5;
+        border: 1px solid #999;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        max-width: 300px;
+      }
+
+      #inputs-container input {
+        margin-bottom: 5px;
+      }
+
+      #inputs-container p, #inputs-container label, #inputs-container button {
+        word-wrap: break-word;
+      }
+
+      #panel-toggle {
+        display: block;
+        width: 100%;
+        text-align: right;
+        background: #f0f0f0;
+        border: 1px solid #ccc;
+        padding: 2px 8px;
+        cursor: pointer;
+        font-size: 12px;
+        margin-bottom: 5px;
+      }
+
+      #panel-content.collapsed {
+        display: none;
+      }
+
+      @media (max-width: 600px) {
+        #inputs-container {
+          max-width: calc(100vw - 20px);
+          max-height: calc(100vh - 20px);
+          overflow-y: auto;
+        }
+      }
+    </style>
+  </head>
+  <body onload="initMap()">
+    <div id="inputs-container">
+      <button id="panel-toggle">&#9660; Hide Panel</button>
+      <div id="panel-content">
+        <p>Where are you going?<br/>
+        <label for="start">Start:</label>
+        <input type="text" id="start" placeholder="e.g., San Francisco">
+        <button id="use-current-location">Use Current Location</button>
+        <br/>
+        <label for="end">Destination:</label>
+        <input type="text" id="end" placeholder="e.g., Los Angeles"><br/>
+        <p>Where do you want to stop?<br/>
+        <label for="locationType"><img src="https://img1.wsimg.com/isteam/ip/1574638f-d90c-4eee-a10c-90402cd52671/red-marker-dbb1828.png" alt="Red Marker" width="5%" height="5%">:</label>
+        <input type="text" id="locationType" placeholder="e.g., dinosaur park" style="background-color: rgba(255, 0, 0, 0.2);"><br/>
+        <label for="locationType2"><img src="https://img1.wsimg.com/isteam/ip/1574638f-d90c-4eee-a10c-90402cd52671/blue-marker-d1de3fd.png" alt="Blue Marker" width="5%" height="5%">:</label>
+        <input type="text" id="locationType2" placeholder="e.g., donuts" style="background-color: rgba(0, 0, 255, 0.2);"><br/>
+        <label for="locationType3"><img src="https://img1.wsimg.com/isteam/ip/1574638f-d90c-4eee-a10c-90402cd52671/yellow-marker-bafc6cf.png" alt="Yellow Marker" width="5%" height="5%">:</label>
+        <input type="text" id="locationType3" placeholder="e.g., gas" style="background-color: rgba(255, 255, 0, 0.2);"><br/>
+        <p>How far off route will you go?<br/>
+        <label for="maxDistance">Max Distance (miles):</label>
+        <input type="number" id="maxDistance" min="0" step="0.1"><br/>
+        <button id="submit">Search</button>
+        <button id="reset">Reset</button>
+        <button id="sendToGoogleMaps">Send to Google Maps</button><br/>
+        <font size="-1"><p>*Google Maps returns 20 locations at a time. Break long routes into shorter segments for more results per route miles.</font>
+      </div>
+    </div>
+    <div id="map"></div>
+
+    <script>
+      let map;
+      let service;
+      let directionsService;
+      let directionsRenderer;
+      let markers = [];
+      let selectedMarkers = [];
+
+      function initMap() {
+        map = new google.maps.Map(document.getElementById("map"), {
+          zoom: 10,
+        });
+
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(function(position) {
+            map.setCenter({
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            });
+          }, function() {
+            handleLocationError(true, map.getCenter());
+          });
+        } else {
+          handleLocationError(false, map.getCenter());
+        }
+
+        directionsService = new google.maps.DirectionsService();
+        directionsRenderer = new google.maps.DirectionsRenderer();
+        directionsRenderer.setMap(map);
+
+        new google.maps.places.Autocomplete(document.getElementById("start"));
+        new google.maps.places.Autocomplete(document.getElementById("end"));
+
+        document.getElementById("submit").addEventListener("click", handleUserInput);
+        document.getElementById("reset").addEventListener("click", resetMap);
+        document.getElementById("sendToGoogleMaps").addEventListener("click", sendToGoogleMaps);
+        document.getElementById("use-current-location").addEventListener("click", useCurrentLocation);
+        document.getElementById("panel-toggle").addEventListener("click", function() {
+          const content = document.getElementById("panel-content");
+          const isCollapsed = content.classList.toggle("collapsed");
+          this.innerHTML = isCollapsed ? "&#9658; Show Panel" : "&#9660; Hide Panel";
+        });
+      }
+
+      function handleUserInput() {
+        const start = document.getElementById("start").value;
+        const end = document.getElementById("end").value;
+        const locationType1 = document.getElementById("locationType").value;
+        const locationType2 = document.getElementById("locationType2").value;
+        const locationType3 = document.getElementById("locationType3").value;
+        const maxDistance = document.getElementById("maxDistance").value;
+
+        if (!start || !end || !maxDistance) {
+          alert("Please fill in all required fields");
+          return;
+        }
+
+        displayRoute(start, end);
+
+        if (locationType1) {
+          searchLocationsAlongRoute(locationType1, start, end, parseFloat(maxDistance), "red");
+        }
+        if (locationType2) {
+          searchLocationsAlongRoute(locationType2, start, end, parseFloat(maxDistance), "blue");
+        }
+        if (locationType3) {
+          searchLocationsAlongRoute(locationType3, start, end, parseFloat(maxDistance), "yellow");
+        }
+        updateRoute();
+      }
+
+      function displayRoute(origin, destination) {
+        directionsService.route({
+          origin: origin,
+          destination: destination,
+          travelMode: "DRIVING",
+        }, (result, status) => {
+          if (status === "OK") {
+            directionsRenderer.setDirections(result);
+          } else {
+            console.error("Directions request failed due to " + status);
+          }
+        });
+      }
+
+      function updateRoute() {
+        const start = document.getElementById("start").value;
+        const end = document.getElementById("end").value;
+
+        if (!start || !end || selectedMarkers.length === 0) {
+          return;
+        }
+
+        const waypoints = selectedMarkers.map(marker => ({
+          location: marker.getPosition(),
+          stopover: true,
+        }));
+
+        directionsService.route({
+          origin: start,
+          destination: end,
+          waypoints: waypoints,
+          travelMode: "DRIVING",
+        }, (result, status) => {
+          if (status === "OK") {
+            directionsRenderer.setDirections(result);
+          } else {
+            console.error("Directions request failed due to " + status);
+          }
+        });
+      }
+
+      function searchLocationsAlongRoute(type, origin, destination, maxDistance, color) {
+        service = new google.maps.places.PlacesService(map);
+
+        directionsService.route({
+          origin: origin,
+          destination: destination,
+          travelMode: "DRIVING",
+        }, (result, status) => {
+          if (status === "OK") {
+            const routeBounds = result.routes[0].bounds;
+            const routePath = result.routes[0].overview_path;
+
+            service.textSearch({ query: type, bounds: routeBounds }, (results, status) => {
+              if (status === "OK") {
+                results.forEach((result) => {
+                  if (isWithinMaxDistance(result, routePath, maxDistance)) {
+                    createMarker(result, color);
+                  }
+                });
+              } else {
+                console.error("Places request failed due to " + status);
+              }
+            });
+
+            map.fitBounds(routeBounds);
+          } else {
+            console.error("Directions request failed due to " + status);
+          }
+        });
+      }
+
+      function isWithinMaxDistance(place, routePath, maxDistance) {
+        const placeLatLng = new google.maps.LatLng(
+          place.geometry.location.lat(),
+          place.geometry.location.lng()
+        );
+        const maxDistanceMeters = maxDistance * 1609.34;
+
+        for (const point of routePath) {
+          if (google.maps.geometry.spherical.computeDistanceBetween(placeLatLng, point) <= maxDistanceMeters) {
+            return true;
+          }
+        }
+        return false;
+      }
+
+      function createMarker(place, color) {
+        const marker = new google.maps.Marker({
+          map: map,
+          position: place.geometry.location,
+          icon: { url: `http://maps.google.com/mapfiles/ms/icons/${color}-dot.png` },
+          selected: false,
+        });
+
+        markers.push(marker);
+
+        const infowindow = new google.maps.InfoWindow();
+
+        google.maps.event.addListener(marker, "click", () => {
+          marker.selected = !marker.selected;
+          marker.setIcon({
+            url: `http://maps.google.com/mapfiles/ms/icons/${marker.selected ? "green" : color}-dot.png`,
+          });
+
+          if (marker.selected) {
+            selectedMarkers.push(marker);
+          } else {
+            const index = selectedMarkers.indexOf(marker);
+            if (index !== -1) selectedMarkers.splice(index, 1);
+          }
+
+          infowindow.setContent(`<div><strong>${place.name}</strong><br>${place.formatted_address}</div>`);
+          infowindow.open(map, marker);
+          updateRoute();
+        });
+      }
+
+      function clearMarkers() {
+        for (let i = 0; i < markers.length; i++) {
+          markers[i].setMap(null);
+        }
+        markers = [];
+      }
+
+      function resetMap() {
+        clearMarkers();
+        selectedMarkers = [];
+        directionsRenderer.set('directions', null);
+        map.setCenter({ lat: 32.7767, lng: -96.7970 });
+        map.setZoom(10);
+        document.getElementById("start").value = '';
+        document.getElementById("end").value = '';
+        document.getElementById("locationType").value = '';
+        document.getElementById("locationType2").value = '';
+        document.getElementById("locationType3").value = '';
+        document.getElementById("maxDistance").value = '';
+        updateRoute();
+      }
+
+      function sendToGoogleMaps() {
+        const start = document.getElementById("start").value;
+        const end = document.getElementById("end").value;
+
+        if (!start || !end) {
+          alert("Please enter a start and end location.");
+          return;
+        }
+
+        const waypoints = selectedMarkers.map(marker => marker.getPosition().toUrlValue()).join("|");
+        const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(start)}&destination=${encodeURIComponent(end)}&waypoints=${encodeURIComponent(waypoints)}`;
+
+        window.open(googleMapsUrl, '_blank');
+      }
+
+      function useCurrentLocation() {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(function(position) {
+            const latlng = { lat: position.coords.latitude, lng: position.coords.longitude };
+            const geocoder = new google.maps.Geocoder();
+            geocoder.geocode({ location: latlng }, function(results, status) {
+              if (status === 'OK' && results[0]) {
+                document.getElementById("start").value = results[0].formatted_address;
+              } else {
+                window.alert('No results found');
+              }
+            });
+          }, function() {
+            handleLocationError(true);
+          });
+        } else {
+          handleLocationError(false);
+        }
+      }
+
+      function handleLocationError(browserHasGeolocation) {
+        window.alert(browserHasGeolocation ?
+          'Error: The Geolocation service failed.' :
+          'Error: Your browser doesn\'t support geolocation.');
+      }
+    </script>
+  </body>
+</html>
