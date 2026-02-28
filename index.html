@@ -347,12 +347,37 @@
       }
 
       #maps-banner { left: 12px; }
+
+      /* floating button — always visible on map so panel can always be reopened */
+      #panel-fab {
+        display: flex;
+        position: fixed;
+        top: 14px;
+        left: 14px;
+        z-index: 15;
+        align-items: center;
+        gap: 8px;
+        background: var(--bg);
+        border: 1.5px solid var(--border);
+        border-radius: 24px;
+        padding: 8px 14px;
+        box-shadow: var(--shadow);
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+      }
     }
   </style>
 </head>
 <body onload="initMap()">
 
   <div id="map"></div>
+
+  <!-- Floating button (mobile only) — always accessible to reopen panel -->
+  <button id="panel-fab" style="display:none" aria-label="Open panel">
+    ☰ <span id="fab-label">Route Scout</span>
+  </button>
 
   <!-- Fallback banner when window.open is blocked -->
   <div id="maps-banner">
@@ -500,9 +525,20 @@
       document.getElementById('maps-banner-close')    .addEventListener('click', () => {
         document.getElementById('maps-banner').style.display = 'none';
       });
-      document.getElementById('panel-handle').addEventListener('click', () => {
-        document.getElementById('panel').classList.toggle('open');
-      });
+      document.getElementById('panel-handle').addEventListener('click', togglePanel);
+
+      /* show FAB only on mobile */
+      if (window.innerWidth <= 768) {
+        document.getElementById('panel-fab').style.display = 'flex';
+      }
+      document.getElementById('panel-fab').addEventListener('click', togglePanel);
+    }
+
+    function togglePanel() {
+      const panel = document.getElementById('panel');
+      const isOpen = panel.classList.toggle('open');
+      /* hide FAB when panel is open to avoid overlap, show when closed */
+      document.getElementById('panel-fab').style.display = isOpen ? 'none' : 'flex';
     }
 
     /* ── UNIT TOGGLE ───────────────────────────────────── */
@@ -537,8 +573,11 @@
       if (t2) searchAlongRoute(t2, start, end, maxMiles, 'green');
       if (t3) searchAlongRoute(t3, start, end, maxMiles, 'blue');
 
-      /* collapse bottom sheet on mobile */
-      document.getElementById('panel').classList.remove('open');
+      /* collapse bottom sheet on mobile and show FAB */
+      if (window.innerWidth <= 768) {
+        document.getElementById('panel').classList.remove('open');
+        document.getElementById('panel-fab').style.display = 'flex';
+      }
     }
 
     /* ── ROUTE DISPLAY ─────────────────────────────────── */
@@ -625,9 +664,11 @@
 
       if (marker._selected) {
         selectedMarkers.push(marker);
+        iw.open(map, marker); // only open InfoWindow when selecting
       } else {
         const i = selectedMarkers.indexOf(marker);
         if (i !== -1) selectedMarkers.splice(i, 1);
+        iw.close(); // close InfoWindow when deselecting so it doesn't block re-clicks
       }
 
       /* sync list item */
@@ -636,7 +677,6 @@
         entry.listItem.classList.toggle('selected', marker._selected);
       }
 
-      iw.open(map, marker);
       updateRoute();
     }
 
@@ -662,6 +702,15 @@
       return el;
     }
 
+    function updateHandleLabel() {
+      const count = allResults.length;
+      const text  = count > 0 ? `${count} results — tap to view` : 'Route Scout';
+      const label = document.querySelector('.handle-label');
+      if (label) label.textContent = text;
+      const fab = document.getElementById('fab-label');
+      if (fab) fab.textContent = count > 0 ? `${count} results` : 'Route Scout';
+    }
+
     function refreshResultsList() {
       const section = document.getElementById('results-section');
       const list    = document.getElementById('results-list');
@@ -671,6 +720,13 @@
 
       section.style.display = 'block';
       document.getElementById('results-count').textContent = `(${allResults.length} found)`;
+
+      /* on mobile, re-open the panel so results are visible and hide FAB */
+      if (window.innerWidth <= 768) {
+        document.getElementById('panel').classList.add('open');
+        document.getElementById('panel-fab').style.display = 'none';
+      }
+      updateHandleLabel();
 
       const terms = {
         red:   document.getElementById('locationType') .value || 'Stop 1',
@@ -723,6 +779,7 @@
         .forEach(id => { document.getElementById(id).value = ''; });
 
       document.getElementById('maps-banner').style.display = 'none';
+      updateHandleLabel();
     }
 
     /* ── SEND TO GOOGLE MAPS ───────────────────────────── */
