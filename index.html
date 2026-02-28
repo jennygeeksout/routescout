@@ -307,6 +307,7 @@
 
     /* ── MOBILE ──────────────────────────────────── */
     @media (max-width: 768px) {
+      body { overflow-x: hidden; }
       #map { left: 0; }
 
       #panel {
@@ -314,34 +315,56 @@
         top: auto;
         left: 0; right: 0; bottom: 0;
         width: 100%;
-        height: 82vh;
+        max-width: 100vw;
+        overflow-x: hidden;
+        height: 78vh;
         border-right: none;
         border-top: 1.5px solid var(--border);
         border-radius: 20px 20px 0 0;
         box-shadow: 0 -6px 32px rgba(0,0,0,0.11);
-        transform: translateY(calc(100% - 64px));
+        transform: translateY(calc(100% - 56px));
         transition: transform 0.35s cubic-bezier(0.32,0.72,0,1);
       }
       #panel.open { transform: translateY(0); }
+
+      /* more compact scroll area on mobile */
+      #panel-scroll {
+        padding: 12px 12px 24px;
+      }
+      .section { margin-bottom: 14px; }
+
+      /* smaller inputs on mobile */
+      .input {
+        height: 36px;
+        font-size: 13px;
+        padding: 0 10px;
+      }
+      .loc-btn {
+        width: 36px; height: 36px;
+        font-size: 16px;
+      }
+      .unit-btn { height: 36px; padding: 0 10px; }
+      .btn { height: 36px; font-size: 13px; }
+      .btn-reset { padding: 0 12px; }
 
       #panel-handle {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        height: 64px;
+        height: 56px;
         cursor: pointer;
         flex-shrink: 0;
         user-select: none;
-        gap: 6px;
+        gap: 5px;
       }
       .handle-bar {
-        width: 40px; height: 4px;
+        width: 36px; height: 4px;
         border-radius: 2px;
         background: #d1d5db;
       }
       .handle-label {
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 600;
         color: var(--text);
       }
@@ -367,6 +390,19 @@
         font-weight: 600;
         color: var(--text);
       }
+    }
+
+    /* ── SMALL PHONES (iPhone SE, older Android) ─ */
+    @media (max-width: 390px) {
+      #panel { height: 82vh; }
+      #panel-scroll { padding: 10px 10px 20px; }
+      .input { height: 34px; font-size: 12px; padding: 0 8px; }
+      .loc-btn { width: 34px; height: 34px; font-size: 15px; }
+      .unit-btn { height: 34px; padding: 0 8px; font-size: 12px; }
+      .btn { height: 34px; font-size: 12px; }
+      .section-label { font-size: 9px; margin-bottom: 7px; }
+      .section { margin-bottom: 12px; }
+      .disclaimer { font-size: 10px; }
     }
   </style>
 </head>
